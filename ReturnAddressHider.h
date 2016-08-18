@@ -135,7 +135,6 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 		throw std::runtime_error(IntegralToHexString(_llCallFromAddress) + " is not valid address!!\n");
 	if (!isInsideMemoryBlock(_TrueFunctionAddressMemInfo, _llTrueFunctionAddress))
 		throw std::runtime_error(IntegralToHexString(_llTrueFunctionAddress) + " is not valid address!!\n");
-
 	if (!EqualToOneOf((int)_TrueFunctionAddressMemInfo.Protect, PAGE_EXECUTE_WRITECOPY, PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE))
 		throw std::runtime_error(IntegralToHexString(_llCallFromAddress) + " is not executable!!\n");
 	if (_CallFromAddressMemInfo.State != MEM_COMMIT)
@@ -160,8 +159,9 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 	mRestoreDataInfo = std::make_tuple(_CallFromAddress, (const void*)_CallFromAddressMemInfo.BaseAddress, (uint32_t)_CallFromAddressMemInfo.RegionSize);
 	if (FlushInstructionCache(GetCurrentProcess(), NULL, NULL) == NULL)
 	{
+		auto err = GetLastError();
 		VirtualProtect(_CallFromAddressMemInfo.BaseAddress, _CallFromAddressMemInfo.RegionSize, _junk, &_junk2);
-		throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
+		throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(err) + "], region protection restored!!\n");
 	}
 }
 
@@ -201,17 +201,22 @@ inline void ReturnAddressHider::genAsm(const void *_CallFromAddress, const void 
 }
 
 inline void ReturnAddressHider::RestoreCode() {
-	if (mRestorCode && std::get<0>(mRestoreDataInfo) && mRestoreOryginalCodeData) {
-		DWORD _junk, _junk2;
-		if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), PAGE_EXECUTE_READWRITE, &_junk) == 0)
-			throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
-		memcpy((void*)std::get<0>(mRestoreDataInfo), mRestoreOryginalCodeData.get(), mGeneratedAsmCode.size());
-		if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), _junk, &_junk2) == 0)
-			throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
-		if (FlushInstructionCache(GetCurrentProcess(), NULL, NULL) == NULL)
-			throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
+	try {
+		if (mRestorCode && std::get<0>(mRestoreDataInfo) && mRestoreOryginalCodeData) {
+			DWORD _junk, _junk2;
+			if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), PAGE_EXECUTE_READWRITE, &_junk) == 0)
+				throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
+			memcpy((void*)std::get<0>(mRestoreDataInfo), mRestoreOryginalCodeData.get(), mGeneratedAsmCode.size());
+			if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), _junk, &_junk2) == 0)
+				throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
+			if (FlushInstructionCache(GetCurrentProcess(), NULL, NULL) == NULL)
+				throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
+		}
 	}
-	Clear();
+	catch (...) {
+		Clear();
+		throw;
+	}
 }
 
 inline void ReturnAddressHider::Clear() {
