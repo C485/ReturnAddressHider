@@ -10,7 +10,12 @@ static __declspec(noinline) void SecuredFunction()
 	auto isInRange = [&](void* start, void* end, void* ptr) {
 		return (uint64_t)start <= (uint64_t)ptr && (uint64_t)ptr <= (uint64_t)end;
 	};
+#ifdef _MSC_VER
 	if (isInRange(RandomPlaceInSecuredFunctionDll, (char*)RandomPlaceInSecuredFunctionDll + 500, _ReturnAddress()))
+#else
+	if (isInRange(RandomPlaceInSecuredFunctionDll, (char*)RandomPlaceInSecuredFunctionDll + 500, __builtin_return_address(0)))
+#endif
+
 		std::cout << "Access granted!\n";
 	else
 		std::cout << "Access denied!\n";
@@ -42,7 +47,7 @@ static __declspec(noinline) void test() {
 
 int main() {
 	RandomPlaceInSecuredFunctionDll = VirtualAlloc(NULL, 500, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-	FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
+	FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0);
 	test();
 	VirtualFree(RandomPlaceInSecuredFunctionDll, 0, MEM_RELEASE);
 	return 0;

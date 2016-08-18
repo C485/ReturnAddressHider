@@ -33,13 +33,13 @@ private:
 	void Clear();
 
 	template <typename A>
-	using checkIntegralType = typename std::enable_if<std::is_integral<A>::value, A>::type;
+	using checkIntegralType = typename std::enable_if<std::is_integral<A>::value, bool>::type;
 
 	template <typename A, typename B>
-	using checkIsSameType = typename std::enable_if<std::is_same<A, B>::value, A>::type;
+	using checkIsSameType = typename std::enable_if<std::is_same<A, B>::value, bool>::type;
 
 	template <typename A>
-	using checkIsPointerType = typename std::enable_if<std::is_pointer<A>::value, A>::type;
+	using checkIsPointerType = typename std::enable_if<std::is_pointer<A>::value, bool>::type;
 
 	template <typename A, typename B, checkIsSameType<A, B> = 0>
 	bool EqualToOneOf(const A &a, const B &b) {
@@ -53,20 +53,20 @@ private:
 	template <typename A, checkIntegralType<A> = 0>
 	std::string IntegralToHexString(const A val) {
 		char buff[100] = { 0 };
-		sprintf_s(buff, "%llx", (uint64_t)val);
+		snprintf(buff, sizeof(buff), "%llx", (uint64_t)val);
 		return buff;
 	}
 
 	template <typename A, checkIsPointerType<A> = 0>
 	std::string IntegralToHexString(const A val) {
 		char buff[100] = { 0 };
-		sprintf_s(buff, "%llx", (uint64_t)val);
+		snprintf(buff, sizeof(buff), "%llx", (uint64_t)val);
 		return buff;
 	}
 
 	template <typename A, checkIntegralType<A> = 0>
 	void AppendInt(const A val) {
-		for (int i = 0; i < sizeof(A) * 8; i += 8)
+		for (unsigned int i = 0; i < sizeof(A) * 8; i += 8)
 			mGeneratedAsmCode.push_back((uint8_t)((val >> i) & 0xff));
 	}
 
@@ -157,7 +157,7 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 	}
 	memcpy((void*)_CallFromAddress, &mGeneratedAsmCode[0], mGeneratedAsmCode.size());
 	mRestoreDataInfo = std::make_tuple(_CallFromAddress, (const void*)_CallFromAddressMemInfo.BaseAddress, (uint32_t)_CallFromAddressMemInfo.RegionSize);
-	if (FlushInstructionCache(GetCurrentProcess(), NULL, NULL) == NULL)
+	if (FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0) == 0)
 	{
 		auto err = GetLastError();
 		VirtualProtect(_CallFromAddressMemInfo.BaseAddress, _CallFromAddressMemInfo.RegionSize, _junk, &_junk2);
@@ -209,7 +209,7 @@ inline void ReturnAddressHider::RestoreCode() {
 			memcpy((void*)std::get<0>(mRestoreDataInfo), mRestoreOryginalCodeData.get(), mGeneratedAsmCode.size());
 			if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), _junk, &_junk2) == 0)
 				throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
-			if (FlushInstructionCache(GetCurrentProcess(), NULL, NULL) == NULL)
+			if (FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0) == 0)
 				throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
 		}
 	}
