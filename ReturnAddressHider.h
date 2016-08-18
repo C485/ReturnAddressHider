@@ -179,7 +179,7 @@ inline void ReturnAddressHider::genAsm(const void *_CallFromAddress, const void 
 		AppendCode({ 0x58 });																	//58                    - pop eax
 		AppendCodePointerWithOffset<uint32_t>({ 0x68 }, _TrueFunctionAddress, 0);				//68 CCCCCCCC           - push CCCCCCCC
 		AppendCode({ 0xC3 });																	//C3					- ret
-		AppendCodeAndNumber({ 0x68 }, 0ul);														//68 CCCCCCCC			- push CCCCCCCC
+		AppendCodeAndNumber({ 0x68 }, (uint32_t)0);												//68 CCCCCCCC			- push CCCCCCCC
 		AppendCode({ 0xC3 });																	//C3					- ret
 	}
 	else if (mMode == _ReturnAddressHiderType::_64Bit64BitAddress) {
@@ -194,7 +194,7 @@ inline void ReturnAddressHider::genAsm(const void *_CallFromAddress, const void 
 		AppendCode({ 0x58 });																	//58					- pop rax
 		AppendCodePointerWithOffset<uint64_t>({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 },
 			_TrueFunctionAddress, 0);															//FF 25 00000000		- jmp qword ptr[int]
-		AppendCodeAndNumber({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 }, 0ull);						//FF 25 00000000		- jmp qword ptr[int]
+		AppendCodeAndNumber({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 }, (uint64_t)0);				//FF 25 00000000		- jmp qword ptr[int]
 	}
 	else
 		throw std::runtime_error("u wot m8? xD");
