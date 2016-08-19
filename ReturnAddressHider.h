@@ -212,6 +212,7 @@ inline void ReturnAddressHider::RestoreCode() {
 			if (FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0) == 0)
 				throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
 		}
+		Clear();
 	}
 	catch (...) {
 		Clear();
