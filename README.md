@@ -1,6 +1,6 @@
 ReturnAddressHider
 --------
-Simple header only library to chenge return address on current stack frame.
+Simple header only library to change return address on current stack frame.
 Features
 --------
 * Supports x86 and x64 code
