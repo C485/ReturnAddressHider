@@ -6,7 +6,6 @@
 #pragma once
 #include <Windows.h>
 #include <stdint.h>
-#include <string>
 #include <vector>
 #include <memory>
 #include <tuple>
@@ -18,9 +17,9 @@ enum class _ReturnAddressHiderType : uint8_t {
 
 class ReturnAddressHider {
 public:
-	ReturnAddressHider(bool = true);
-	ReturnAddressHider(ReturnAddressHider&&) = default;
-	ReturnAddressHider& operator = (ReturnAddressHider&&) = default;
+	explicit ReturnAddressHider(bool = true);
+	ReturnAddressHider(ReturnAddressHider&&) = delete;
+	ReturnAddressHider& operator = (ReturnAddressHider&&) = delete;
 	ReturnAddressHider(const ReturnAddressHider&) = delete;
 	ReturnAddressHider& operator = (const ReturnAddressHider&) = delete;
 	virtual ~ReturnAddressHider();
@@ -42,37 +41,37 @@ private:
 	using checkIsPointerType = typename std::enable_if<std::is_pointer<A>::value, bool>::type;
 
 	template <typename A, typename B, checkIsSameType<A, B> = 0>
-	bool EqualToOneOf(const A &a, const B &b) {
+	static bool EqualToOneOf(const A &a, const B &b) {
 		return a == b;
 	}
 
-	template <typename A, typename B, typename... C> bool EqualToOneOf(const A &a, const B &b, C const &... args) {
+	template <typename A, typename B, typename... C>
+	static bool EqualToOneOf(const A &a, const B &b, C const &... args) {
 		return a == b || EqualToOneOf(a, args...);
 	}
 
 	template <typename A, checkIntegralType<A> = 0>
-	std::string IntegralToHexString(const A val) {
+	static std::string IntegralToHexString(const A val) {
 		char buff[100] = { 0 };
-		snprintf(buff, sizeof(buff), "%llx", (uint64_t)val);
+		snprintf(buff, sizeof(buff), "%llx", static_cast<uint64_t>(val));
 		return buff;
 	}
 
 	template <typename A, checkIsPointerType<A> = 0>
-	std::string IntegralToHexString(const A val) {
+	static std::string IntegralToHexString(const A val) {
 		char buff[100] = { 0 };
-		snprintf(buff, sizeof(buff), "%llx", (uint64_t)val);
+		snprintf(buff, sizeof(buff), "%llx", reinterpret_cast<uint64_t>(val));
 		return buff;
 	}
 
 	template <typename A, checkIntegralType<A> = 0>
 	void AppendInt(const A val) {
 		for (unsigned int i = 0; i < sizeof(A) * 8; i += 8)
-			mGeneratedAsmCode.push_back((uint8_t)((val >> i) & 0xff));
+			mGeneratedAsmCode.push_back(static_cast<uint8_t>((val >> i) & 0xff));
 	}
 
-	inline void AppendCode(const std::initializer_list<uint8_t> &p) {
-		for (auto i : p)
-			mGeneratedAsmCode.push_back(i);
+	void AppendCode(const std::initializer_list<uint8_t> &p) {
+		mGeneratedAsmCode.insert(mGeneratedAsmCode.end(), p);
 	}
 
 	template <typename A, checkIntegralType<A> = 0>
@@ -88,14 +87,10 @@ private:
 		// why there is no option to tell compiler that i know what i doing :/
 		union {
 			C val2 = 0;
-			void* val;
+			const void* val;
 		} junk;
-		junk.val = (void*)val;
+		junk.val = static_cast<const void*>(val);
 		AppendInt(junk.val2 + offset);
-	}
-
-	inline uint32_t PtrTouint32_t(const void *p) {
-		return((uint32_t)(UINT_PTR)p);
 	}
 private:
 	std::unique_ptr<uint8_t[]> mRestoreOryginalCodeData;
@@ -116,15 +111,15 @@ inline ReturnAddressHider::~ReturnAddressHider() {
 
 inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void *_TrueFunctionAddress) {
 	MEMORY_BASIC_INFORMATION _CallFromAddressMemInfo, _TrueFunctionAddressMemInfo;
-	uint64_t _llCallFromAddress = (uint64_t)_CallFromAddress, _llTrueFunctionAddress = (uint64_t)_TrueFunctionAddress;
+	auto _llCallFromAddress = reinterpret_cast<uint64_t>(_CallFromAddress), _llTrueFunctionAddress = reinterpret_cast<uint64_t>(_TrueFunctionAddress);
 	DWORD _junk, _junk2;
 
 	auto getMaxRegionAddress = [](const MEMORY_BASIC_INFORMATION& mem) -> uint64_t {
-		return (uint64_t)mem.BaseAddress + mem.RegionSize;
+		return reinterpret_cast<uint64_t>(mem.BaseAddress) + mem.RegionSize;
 	};
 
 	auto isInsideMemoryBlock = [&getMaxRegionAddress](const MEMORY_BASIC_INFORMATION& mem, uint64_t addr) {
-		return (uint64_t)mem.BaseAddress <= addr && addr <= getMaxRegionAddress(mem);
+		return reinterpret_cast<uint64_t>(mem.BaseAddress) <= addr && addr <= getMaxRegionAddress(mem);
 	};
 
 	if (VirtualQuery(_CallFromAddress, &_CallFromAddressMemInfo, sizeof(MEMORY_BASIC_INFORMATION)) == 0)
@@ -135,7 +130,7 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 		throw std::runtime_error(IntegralToHexString(_llCallFromAddress) + " is not valid address!!\n");
 	if (!isInsideMemoryBlock(_TrueFunctionAddressMemInfo, _llTrueFunctionAddress))
 		throw std::runtime_error(IntegralToHexString(_llTrueFunctionAddress) + " is not valid address!!\n");
-	if (!EqualToOneOf((int)_TrueFunctionAddressMemInfo.Protect, PAGE_EXECUTE_WRITECOPY, PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE))
+	if (!EqualToOneOf(static_cast<int>(_TrueFunctionAddressMemInfo.Protect), PAGE_EXECUTE_WRITECOPY, PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE))
 		throw std::runtime_error(IntegralToHexString(_llCallFromAddress) + " is not executable!!\n");
 	if (_CallFromAddressMemInfo.State != MEM_COMMIT)
 		throw std::runtime_error(IntegralToHexString(_llCallFromAddress) + " is not in committed page!!\n");
@@ -143,7 +138,7 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 		throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(_CallFromAddressMemInfo.BaseAddress) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
 	genAsm(_CallFromAddress, _TrueFunctionAddress);
 	auto isTherePlaceForAsmCode = [&]() -> bool {
-		auto sizeOfStruct = (uint64_t)mGeneratedAsmCode.size();
+		auto sizeOfStruct = static_cast<uint64_t>(mGeneratedAsmCode.size());
 		auto restPageSize = getMaxRegionAddress(_CallFromAddressMemInfo) - _llCallFromAddress;
 		return restPageSize > sizeOfStruct;
 	};
@@ -155,10 +150,9 @@ inline void ReturnAddressHider::Process(const void *_CallFromAddress, const void
 		mRestoreOryginalCodeData = std::make_unique<uint8_t[]>(mGeneratedAsmCode.size());
 		memcpy(mRestoreOryginalCodeData.get(), _CallFromAddress, mGeneratedAsmCode.size());
 	}
-	memcpy((void*)_CallFromAddress, &mGeneratedAsmCode[0], mGeneratedAsmCode.size());
-	mRestoreDataInfo = std::make_tuple(_CallFromAddress, (const void*)_CallFromAddressMemInfo.BaseAddress, (uint32_t)_CallFromAddressMemInfo.RegionSize);
-	if (FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0) == 0)
-	{
+	memcpy(const_cast<void*>(_CallFromAddress), &mGeneratedAsmCode[0], mGeneratedAsmCode.size());
+	mRestoreDataInfo = std::make_tuple(_CallFromAddress, const_cast<const void*>(_CallFromAddressMemInfo.BaseAddress), static_cast<uint32_t>(_CallFromAddressMemInfo.RegionSize));
+	if (FlushInstructionCache(GetCurrentProcess(), nullptr, SIZE_T(0)) == 0) {
 		auto err = GetLastError();
 		VirtualProtect(_CallFromAddressMemInfo.BaseAddress, _CallFromAddressMemInfo.RegionSize, _junk, &_junk2);
 		throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(err) + "], region protection restored!!\n");
@@ -179,7 +173,7 @@ inline void ReturnAddressHider::genAsm(const void *_CallFromAddress, const void 
 		AppendCode({ 0x58 });																	//58                    - pop eax
 		AppendCodePointerWithOffset<uint32_t>({ 0x68 }, _TrueFunctionAddress, 0);				//68 CCCCCCCC           - push CCCCCCCC
 		AppendCode({ 0xC3 });																	//C3					- ret
-		AppendCodeAndNumber({ 0x68 }, (uint32_t)0);												//68 CCCCCCCC			- push CCCCCCCC
+		AppendCodeAndNumber({ 0x68 }, uint32_t(0));												//68 CCCCCCCC			- push CCCCCCCC
 		AppendCode({ 0xC3 });																	//C3					- ret
 	}
 	else if (mMode == _ReturnAddressHiderType::_64Bit64BitAddress) {
@@ -194,7 +188,7 @@ inline void ReturnAddressHider::genAsm(const void *_CallFromAddress, const void 
 		AppendCode({ 0x58 });																	//58					- pop rax
 		AppendCodePointerWithOffset<uint64_t>({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 },
 			_TrueFunctionAddress, 0);															//FF 25 00000000		- jmp qword ptr[int]
-		AppendCodeAndNumber({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 }, (uint64_t)0);				//FF 25 00000000		- jmp qword ptr[int]
+		AppendCodeAndNumber({ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 }, uint64_t(0));				//FF 25 00000000		- jmp qword ptr[int]
 	}
 	else
 		throw std::runtime_error("u wot m8? xD");
@@ -204,12 +198,12 @@ inline void ReturnAddressHider::RestoreCode() {
 	try {
 		if (mRestorCode && std::get<0>(mRestoreDataInfo) && mRestoreOryginalCodeData) {
 			DWORD _junk, _junk2;
-			if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), PAGE_EXECUTE_READWRITE, &_junk) == 0)
+			if (VirtualProtect(const_cast<void*>(std::get<1>(mRestoreDataInfo)), std::get<2>(mRestoreDataInfo), PAGE_EXECUTE_READWRITE, &_junk) == 0)
 				throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
-			memcpy((void*)std::get<0>(mRestoreDataInfo), mRestoreOryginalCodeData.get(), mGeneratedAsmCode.size());
-			if (VirtualProtect((void*)std::get<1>(mRestoreDataInfo), std::get<2>(mRestoreDataInfo), _junk, &_junk2) == 0)
+			memcpy(const_cast<void*>(std::get<0>(mRestoreDataInfo)), mRestoreOryginalCodeData.get(), mGeneratedAsmCode.size());
+			if (VirtualProtect(const_cast<void*>(std::get<1>(mRestoreDataInfo)), std::get<2>(mRestoreDataInfo), _junk, &_junk2) == 0)
 				throw std::runtime_error(std::string("Failed to VirtualProtect[") + IntegralToHexString(std::get<1>(mRestoreDataInfo)) + "] with GetLastError[" + IntegralToHexString(GetLastError()) + "]\n");
-			if (FlushInstructionCache(GetCurrentProcess(), nullptr, (SIZE_T)0) == 0)
+			if (FlushInstructionCache(GetCurrentProcess(), nullptr, SIZE_T(0)) == 0)
 				throw std::runtime_error(std::string("Failed to FlushInstructionCache with GetLastError[") + IntegralToHexString(GetLastError()) + "]\n");
 		}
 		Clear();
