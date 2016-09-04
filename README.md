@@ -6,12 +6,6 @@ Features
 * Supports x86 and x64 code
 * Easy to use
 
-TO DO
---------
-* Add tests
-* Add ability to change return addresses in all frames.
-* Add Linux support
-
 Requirements
 -----
 * C++14
